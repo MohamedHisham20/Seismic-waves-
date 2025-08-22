@@ -1,20 +1,26 @@
+
 // App.js
+// Main entry point for the Seismic Waves React frontend.
+// Handles file upload, planet selection, and displays seismic event visualization.
+
 import React, { useState } from 'react';
-import Header from './components/header';
-import MoonModel from './moon/MoonModel';
-import MarsModel from './mars/marModel';
+import Header from './components/header'; // Top header bar
+import MoonModel from './moon/MoonModel'; // 3D Moon visualization
+import MarsModel from './mars/marModel';  // 3D Mars visualization
 
 export default function App() {
-  const [planet, setPlanet] = useState('moon'); // Default selected option
-  const [speed, setSpeed] = useState('');
-  const [lat, setLat] = useState('');
-  const [lng, setLng] = useState('');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  // State variables for selected planet and seismic event data
+  const [planet, setPlanet] = useState('moon'); // 'moon' or 'mars'
+  const [speed, setSpeed] = useState('');      // Seismic event speed
+  const [lat, setLat] = useState('');          // Latitude of event
+  const [lng, setLng] = useState('');          // Longitude of event
+  const [date, setDate] = useState('');        // Date of event
+  const [time, setTime] = useState('');        // Time of event
 
+  // Handles switching between Moon and Mars
   const handleOptionChange = (event) => {
-    setPlanet(event.target.value); // Update the selected option
-    setImageUrl(null)
+    setPlanet(event.target.value); // Update selected planet
+    setImageUrl(null); // Reset image and event data
     setSpeed(null);
     setLat(null);
     setLng(null);
@@ -22,20 +28,25 @@ export default function App() {
     setTime(null);
   };
 
-  const [imageUrl, setImageUrl] = useState(null); // State to store image URL
+  // State for uploaded image (seismic plot)
+  const [imageUrl, setImageUrl] = useState(null);
 
+  // Handles file upload and API request
   const uploadFile = () => {
-    setImageUrl(null)
+    // Reset previous results
+    setImageUrl(null);
     setSpeed(null);
     setLat(null);
     setLng(null);
     setDate(null);
     setTime(null);
+    // Get file from input
     const fileInput = document.getElementById('fileInput');
     const file = fileInput.files[0];
     const formData = new FormData();
     formData.append('file', file);
 
+    // Choose API endpoint based on planet
     if (planet === 'moon') {
       fetch('https://www.nasa.great-eagle.net/upload_mseed_lunar', {
         method: 'POST',
@@ -43,6 +54,7 @@ export default function App() {
       })
       .then(response => response.json())
       .then(data => {
+        // If image returned, update state with event data
         if (data.image) {
           setImageUrl('data:image/png;base64,' + data.image);
           setSpeed(data.speed);
@@ -77,12 +89,14 @@ export default function App() {
     }
   };
 
+  // Main UI rendering
   return (
     <div style={styles.container}>
-      <Header />
+      <Header /> {/* Top header bar */}
       <div style={styles.columnsContainer}>
         <div style={styles.columnLeft}>
           <main style={styles.main}>
+            {/* File input for seismic data upload */}
             <input type="file" id="fileInput" 
             style={{
               ...styles.input, marginLeft: 10, 
@@ -90,6 +104,7 @@ export default function App() {
                 ? 'rgba(150, 150, 150, 0.75)' 
                 : 'rgba(209, 149, 92, 0.75)'
             }} />
+            {/* Upload button triggers API call */}
             <button 
               onClick={uploadFile} 
               style={{
@@ -101,6 +116,7 @@ export default function App() {
               Upload
             </button>
 
+            {/* Radio buttons for planet selection */}
             <div>
               <label style={styles.label}>
                 <input
@@ -122,12 +138,14 @@ export default function App() {
                 Mars
               </label>
             </div>
+            {/* Display seismic plot image if available */}
             <div style={{alignItems: 'center', justifyContent: 'center'}}>
             {imageUrl && <img id="image" alt="Uploaded" src={imageUrl} style={styles.image} />}
             </div>
           </main>
         </div>
         <div style={styles.columnRight}>
+          {/* Render Moon or Mars 3D model with event data */}
           {planet === 'moon' ? 
             <MoonModel sentSpeed={speed * 1e10} sentLat={lat} sentLng={lng} sentDate={date} sentTime={time} /> 
           : 
@@ -139,7 +157,7 @@ export default function App() {
   );
 }
 
-// Styles for layout
+// Styles for layout and UI components
 const styles = {
   container: {
     height: '100vh',

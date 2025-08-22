@@ -1,3 +1,16 @@
+
+# ---------------------------------------------
+# Seismic Waves API
+# ---------------------------------------------
+# This Flask API serves endpoints for lunar and Martian seismic data analysis.
+# It loads ML models, processes uploaded files, and returns predictions and visualizations.
+#
+# Main Endpoints:
+#   - /upload_mseed_lunar: Upload lunar mseed file for analysis
+#   - /upload_mseed_mars: Upload Martian mseed file for analysis
+#   - /upload_csv_lunar: Upload lunar CSV file for analysis
+# ---------------------------------------------
+
 import random
 from flask import Flask, request, jsonify
 import pandas as pd
@@ -7,193 +20,152 @@ import base64
 from flask_cors import CORS
 from obspy import read
 
+# ---------------------------------------------
+# Helper Functions
+# ---------------------------------------------
 
 def predict_seismic_event(passed_model=None):
+    """
+    Processes an uploaded mseed file, runs prediction logic, and returns results.
+    Args:
+        passed_model: Optional ML model (not used in demo)
+    Returns:
+        dict: Contains base64 image, speed, lat, lng, date, and time
+    """
     file = request.files['file']
-    # try:
-    # Read the mseed file into a pandas DataFrame
+    # Read the mseed file using ObsPy
     mseed_data = read(file)
     traces = mseed_data.traces[0].copy()
     tr_times = traces.times()
     tr_data = traces.data
-    # Here you would run your regression model or any other processing
-    # For demonstration, let's create a simple plot based on the CSV data
-    # Assuming your CSV has columns 'x' and 'y'
 
-    # Example regression logic (replace this with your model)
-    # prediction = your_regression_model(data)
+    # TODO: Replace with actual ML model prediction
+    predicted_relative_time = 73500  # Dummy output for demonstration
 
-    predicted_relative_time = 73500  # model output
-
-    # get the date and time of the data start time
+    # Extract start date and time from trace metadata
     date_time = traces.stats.starttime
-
-    # convert the numpy base64 to string
     date_time_str = str(date_time)
-
-    # split the date and time
     date, time = date_time_str.split('T', 1)
-
-    # remove the z in the time
     time_str = time.split('Z')[0]
-    # convert the time into seconds
     seconds = time_to_seconds(time_str)
 
-    # add the time of start of the seismic event
+    # Calculate event start time
     start_time_seconds = seconds + predicted_relative_time
-    # convert back to time (clock)
     start_time_clock = seconds_to_time(start_time_seconds)
 
-    # get the speed of the data at the start time
-    speed = tr_data[int(predicted_relative_time)]
+    # Get speed at predicted time (absolute value)
+    speed = abs(tr_data[int(predicted_relative_time)])
 
-    #make speed positive
-    speed = abs(speed)
-
-    # randomize the lat and lng of the data
-
-    # the lat between -84 and 77
+    # Randomize latitude and longitude for demo
     lat = random.randint(-84, 77)
-
-    # the lng between -134 and 101
     lng = random.randint(-134, 101)
 
-    # plot the data
+    # Plot seismic data and mark prediction
     fig, ax = plt.subplots()
-    ax.plot(tr_times, tr_data)  # time on x-axis and velocity on y-axis
-
-    # Add the prediction to the plot as a red vertical line
+    ax.plot(tr_times, tr_data)  # X: time, Y: velocity
     ax.axvline(x=predicted_relative_time, color='r', linestyle='--')
 
-    # Convert the plot to an image in memory
+    # Convert plot to base64 PNG
     buf = io.BytesIO()
     plt.savefig(buf, format='png')
     buf.seek(0)
-
-    # Encode the image in base64
     image_base64 = base64.b64encode(buf.read()).decode('utf-8')
 
-    return {'image': image_base64, 'speed': speed, 'lat': lat, 'lng': lng, 'date': date, 'time': start_time_clock}
-
+    return {
+        'image': image_base64,
+        'speed': speed,
+        'lat': lat,
+        'lng': lng,
+        'date': date,
+        'time': start_time_clock
+    }
 
 def time_to_seconds(time_str):
-    if isinstance(time_str, str):  # Check if the input is a string
-        # Split the time string into parts
+    """
+    Converts a time string (HH:MM:SS) to seconds (float).
+    """
+    if isinstance(time_str, str):
         h, m, s = time_str.split(':')
-
-        # If seconds contain fractional seconds, split them
         if '.' in s:
-            s, ms = s.split('.')  # Split seconds into whole and fractional parts
+            s, ms = s.split('.')
         else:
-            ms = '0'  # Set milliseconds to zero if not present
-
-        # Convert to integer
-        return int(h) * 3600 + int(m) * 60 + int(s) + float('0.' + ms)  # Include milliseconds as seconds
+            ms = '0'
+        return int(h) * 3600 + int(m) * 60 + int(s) + float('0.' + ms)
     else:
         raise ValueError("Input must be a string in the format 'HH:MM:SS'")
 
-
-# Function to convert seconds to time string
 def seconds_to_time(seconds):
-    hours = seconds // 3600  # Get total hours
-    minutes = (seconds % 3600) // 60  # Get total minutes
-    secs = seconds % 60  # Get remaining seconds
-
-    # Format the time string
+    """
+    Converts seconds (float) to time string (HH:MM:SS).
+    """
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    secs = seconds % 60
     return f"{int(hours):02}:{int(minutes):02}:{int(secs):02}"
 
+# ---------------------------------------------
+# Flask App Setup
+# ---------------------------------------------
 
 app = Flask(__name__)
 CORS(app)
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB upload limit
 
-# Set maximum upload size to 100 MB
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+# ---------------------------------------------
+# API Endpoints
+# ---------------------------------------------
 
-
-# landing page
 @app.route('/')
 def index():
+    """Landing page endpoint."""
     return 'Welcome to the landing page'
 
-
-# Route to handle file upload in mseed format
 @app.route('/upload_mseed_lunar', methods=['POST'])
 def upload_mseed_file_lunar():
-    # Check if the file is in the request
+    """Endpoint for lunar mseed file upload and analysis."""
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
-
     try:
         final_dict = predict_seismic_event()
         return jsonify(final_dict), 200
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-    #return the image to the user in form of png
-
-    # except Exception as e:
-    #     return jsonify({'error': str(e)}), 500
-
-
-# Route to handle file upload in mseed format for mars
 @app.route('/upload_mseed_mars', methods=['POST'])
 def upload_mseed_file_mars():
-    # Check if the file is in the request
+    """Endpoint for Martian mseed file upload and analysis."""
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
-
     try:
         final_dict = predict_seismic_event()
         return jsonify(final_dict), 200
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-# Route to handle csv files
 @app.route('/upload_csv_lunar', methods=['POST'])
 def upload_file():
-    # Check if the file is in the request
+    """Endpoint for lunar CSV file upload and analysis."""
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
-
-    file = request.files['file']  # The CSV file
+    file = request.files['file']
     try:
-        # Read the CSV file into a pandas DataFrame
         data = pd.read_csv(file)
-
-        # Here you would run your regression model or any other processing
-        # For demonstration, let's create a simple plot based on the CSV data
-        # Assuming your CSV has columns 'x' and 'y'
-
-        # Example regression logic (replace this with your model)
-        # prediction = your_regression_model(data)
-
-        start_time = 12720  # model output
-
-        # plot the data
+        # TODO: Replace with actual ML model prediction
+        start_time = 12720  # Dummy output for demonstration
         fig, ax = plt.subplots()
-        ax.plot(data['time_rel(sec)'], data['velocity(m/s)'])  #time on x-axis and velocity on y-axis
-
-        # Add the prediction to the plot as a red vertical line
+        ax.plot(data['time_rel(sec)'], data['velocity(m/s)'])
         ax.axvline(x=start_time, color='r', linestyle='--')
-
-        # Convert the plot to an image in memory
         buf = io.BytesIO()
         plt.savefig(buf, format='png')
         buf.seek(0)
-
-        # Encode the image in base64
         image_base64 = base64.b64encode(buf.read()).decode('utf-8')
-
-        #return the image to the user in form of png
         return jsonify({'image': image_base64}), 200
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ---------------------------------------------
+# Main Entrypoint
+# ---------------------------------------------
 
-# Run the app
 if __name__ == '__main__':
     app.run(debug=True, port=2003)
